@@ -1,1 +1,3 @@
-# set11509-ec-40663397
+# SET11509 - Enterprise Computing: Coursework
+
+## Share Trader Application
