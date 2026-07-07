@@ -1,0 +1,69 @@
+# Define all the services (containers) that make up the application.
+services:
+
+  # The password hashing service. No dependencies — starts first.
+  password-service:
+    # Build the image from the Dockerfile in this directory.
+    build: ./services/password_service
+    # Expose port 5001 to other containers on Docker's internal network.
+    # It is NOT accessible from your host machine.
+    expose:
+      - "5001"
+
+  broker-service:
+    build: ./services/broker_service
+    expose:
+      - "5004"
+    volumes:
+      - broker-data:/app
+
+  share-data-service:
+    build: ./services/share_data_service
+    expose:
+      - "5003"
+
+  # Manages the user database (SQLite). Depends on password-service
+  # because it calls it to hash/verify passwords.
+  user-mngmt-service:
+    build: ./services/user_management_service
+    expose:
+      - "5000"
+    # Mount a named volume at /app (the WORKDIR) so the SQLite users.db
+    # file persists across container restarts. Without this, the database
+    # is wiped every time the container is recreated.
+    volumes:
+      - ums-data:/app
+    # Don't start this service until password-service is running.
+    depends_on:
+      - password-service
+
+  # Issues and validates JWT tokens. Depends on user-mngmt-service
+  # because it fetches user credentials from it during login.
+  authentication-service:
+    build: ./services/authentication_service
+    expose:
+      - "5002"
+    depends_on:
+      - user-mngmt-service
+      - password-service
+
+  # The public-facing entry point. All requests from the Tkinter frontend
+  # go through here. Depends on all backend services being up first.
+  api-gateway:
+    build: ./services/api_gateway
+    # Map port 5010 on your host machine to port 5010 in the container.
+    # This is what allows the Tkinter frontend to reach the gateway
+    # via http://localhost:5010.
+    ports:
+      - "5010:5010"
+    depends_on:
+      - user-mngmt-service
+      - authentication-service
+      - password-service
+
+# Declare the named volume used by user-management-service.
+# Docker manages this volume's lifecycle independently of the containers.
+volumes:
+  ums-data:
+  broker-data:
+
