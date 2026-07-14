@@ -61,30 +61,48 @@ class Repository:
         session_factory = sessionmaker(bind=self.engine) # Context Management
         self.session = scoped_session(session_factory)()
 
-        if not self.get_user_by_username("admin"):
-            self.session.add(User(
-                name="Administrator",
-                username="master",
-                email="master@admin.co.uk",
-                password_hash=reqs.secure_password("root"),
-                role="admin"
-            ))
+        if not self.get_user_by_username("master"):
+            try:
+                self.session.add(User(
+                    name="Administrator",
+                    username="master",
+                    email="master@admin.co.uk",
+                    password_hash=reqs.secure_password("root"),
+                    role="admin"
+                ))
+                self.session.commit()
+            except Exception as e:
+                self.session.rollback()
+                print(f"Admin seed skipped: {e}")
 
     def add_user(self, **kwargs) -> None:
-        self.session.add(User(
-            name=kwargs["name"],
-            username=kwargs["username"],
-            email=kwargs["email"],
-            password_hash=reqs.secure_password(kwargs["password"]),
-            role=kwargs["role"]
-        ))
-        self.session.commit()
+        if self.integrity_check(kwargs["uid"], kwargs["email"], kwargs["username"]):
+            self.session.add(User(
+                name=kwargs["name"],
+                username=kwargs["username"],
+                email=kwargs["email"],
+                password_hash=reqs.secure_password(kwargs["password"]),
+                role=kwargs["role"]
+            ))
+            self.session.commit()
+        else:
+            print(f"Integrity check failed for {kwargs['uid']} or {kwargs['email']} or {kwargs['username']}.")
+
+    def integrity_check(self, uid, email, username) -> bool:
+        return all([
+            self.get_user_by_username(username),
+            self.get_user_by_email(email),
+            self.get_user_by_id(uid)
+        ])
 
     def get_user_by_id(self, uid:int) -> type[User] | None:
         return self.session.query(User).filter(User.uid == uid).one_or_none()
 
     def get_user_by_username(self, username: str) -> type[User] | None:
         return self.session.query(User).filter(User.username == username).one_or_none()
+
+    def get_user_by_email(self, email: str) -> type[User] | None:
+        return self.session.query(User).filter(User.email == email).one_or_none()
 
     # def get_user_by_username_and_password(self, username: str, password) -> type[User] | None:
     #     user = self.session.query(User).filter(User.username == username).one_or_none()
